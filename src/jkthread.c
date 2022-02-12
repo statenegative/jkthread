@@ -57,6 +57,8 @@ int jkthread_create(struct JKThread *thread, void *(*start_routine)(void *),
     assert(start_routine != NULL);
 
     /* Initialize pointer values to NULL in case of failure */
+    thread->regs = NULL;
+    thread->stack = NULL;
 
     /* Create register storage */
     thread->regs = malloc(REGS_SIZE);

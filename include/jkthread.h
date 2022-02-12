@@ -6,16 +6,11 @@
 #ifndef JKTHREAD_H
 #define JKTHREAD_H
 
+#include "jkerrno.h"
+
 enum {
     /** Default stack size of 2MB. */
-    JKTHREAD_STACK_SIZE = 2000000,
-
-    /* Error codes */
-
-    /** General allocation failed. */
-    JKTHREAD_ALLOC_FAIL = 1,
-    /** Stack allocation failed. */
-    JKTHREAD_STACK_LIMIT = 2
+    JKTHREAD_STACK_SIZE = 2000000
 };
 
 /**
