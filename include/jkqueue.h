@@ -41,6 +41,9 @@ int jkqueue_init(struct JKQueue *queue, struct JKThread *thread);
 
 /**
  * \brief Pushes a new thread onto a JKQueue.
+ * 
+ * This action doesn't act like a normal queue push. Rather, the new thread is
+ * placed right after the active node.
  * \param[out] queue The queue to push the thread onto.
  * \param[in] thread The thread to push onto the queue.
  * \return 0 on success, or an error code on failure.
@@ -54,13 +57,6 @@ int jkqueue_push(struct JKQueue *queue, struct JKThread *thread);
  * main thread remains on the queue.
  */
 struct JKThread *jkqueue_pop(struct JKQueue *queue);
-
-/**
- * \brief Peeks the active thread on a JKQueue.
- * \param[in] queue The queue to peek the active thread of.
- * \return A pointer to the active thread.
- */
-struct JKThread *jkqueue_peek(const struct JKQueue *queue);
 
 /**
  * \brief Advances the active thread in a JKQueue.

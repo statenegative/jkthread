@@ -8,45 +8,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum {
-    /** Size of all registers, in bytes. */
-    REGS_SIZE = 72 * 8,
-    /** Width of a register, in bytes. */
-    REG_WIDTH = 8,
+#include "jkqueue.h"
+#include "jkswitch.h"
 
-    /* Register offsets */
-
-    /* RAX */
-    RAX_OFFSET = 0 * REG_WIDTH,
-    /* RBX */
-    RBX_OFFSET = 1 * REG_WIDTH,
-    /* RCX */
-    RCX_OFFSET = 2 * REG_WIDTH,
-    /* RDX */
-    RDX_OFFSET = 3 * REG_WIDTH,
-    /* RSI */
-    RSI_OFFSET = 4 * REG_WIDTH,
-    /* RDI */
-    RDI_OFFSET = 5 * REG_WIDTH,
-    /* RSP */
-    RSP_OFFSET = 6 * REG_WIDTH,
-    /* RBP */
-    RBP_OFFSET = 7 * REG_WIDTH,
-    /* RIP */
-    RIP_OFFSET = 8 * REG_WIDTH
-};
-
-/**
- * \brief Save current register state to a JKThread object.
- * \param[out] thread The object to save the register state to.
- */
-static void save_regs(struct JKThread *thread);
-
-/**
- * \brief Restore registers from a saved state in a JKThead object.
- * \param[in] thread The object to restore the register state from.
- */
-static void restore_regs(const struct JKThread *thread);
+/** Queue of threads. */
+static struct JKQueue g_queue = { NULL };
+/** Main thread. */
+static struct JKThread g_thread;
 
 int jkthread_create(struct JKThread *thread, void *(*start_routine)(void *),
     void *arg)
@@ -55,16 +23,15 @@ int jkthread_create(struct JKThread *thread, void *(*start_routine)(void *),
 
     assert(thread != NULL);
     assert(start_routine != NULL);
-
-    /* Initialize pointer values to NULL in case of failure */
-    thread->regs = NULL;
-    thread->stack = NULL;
-
-    /* Create register storage */
-    thread->regs = malloc(REGS_SIZE);
-    if (thread->regs == NULL) {
-        code = JKTHREAD_ALLOC_FAIL;
-        goto cleanup;
+    
+    /* Create queue if it doesn't yet exist */
+    if (g_queue.active == NULL) {
+        /* Save main thread */
+        jkthread_save_regs(&g_thread);
+        code = jkqueue_init(&g_queue, &g_thread);
+        if (code) {
+            goto cleanup;
+        }
     }
 
     /* Create stack */
@@ -74,73 +41,44 @@ int jkthread_create(struct JKThread *thread, void *(*start_routine)(void *),
         goto cleanup;
     }
 
-    /* Set stack and base pointer values to the beginning of the stack */
-    memcpy(&thread->regs[RSP_OFFSET], &thread->stack, REG_WIDTH);
-    memcpy(&thread->regs[RBP_OFFSET], &thread->stack, REG_WIDTH);
+    /* Set stack and base pointers */
+    memcpy(thread->registers.rsp, &thread->stack, JKTHREAD_REG_WIDTH);
+    memcpy(thread->registers.rbp, &thread->stack, JKTHREAD_REG_WIDTH);
+    /* Set RIP value to start_routine */
+    memcpy(thread->registers.rip, &start_routine, JKTHREAD_REG_WIDTH);
 
-    (void)start_routine;
-    (void)arg;
-    save_regs(thread);
-    restore_regs(thread);
+    /* Add thread to queue */
+    jkqueue_push(&g_queue, thread);
+
+    /* Context switch */
+    /* Save current register state */
+    jkthread_save_regs(g_queue.active->thread);
+    /* Advance to the new thread */
+    jkqueue_next(&g_queue);
+    /* restore new thread's registers */
+    jkthread_restore_regs(g_queue.active->thread,
+        g_queue.active->prev->thread->registers.rip, arg);
 
     /* Clean up in case of error */
 cleanup:
     if (code) {
-        free(thread->regs);
         free(thread->stack);
     }
 
     return code;
 }
 
-static void save_regs(struct JKThread *thread)
+void jkthread_switch()
 {
-    char rip[REG_WIDTH];
+    /* Final parameter of jkthread_restore_regs may not be NULL, so a pointer
+       to uninitialized memory is given instead. */
+    char dummy[JKTHREAD_REG_WIDTH];
 
-    __asm__("movq %%rax, %[rax]\n"
-            "movq %%rbx, %[rbx]\n"
-            "movq %%rcx, %[rcx]\n"
-            "movq %%rdx, %[rdx]\n"
-            "movq %%rsi, %[rsi]\n"
-            "movq %%rdi, %[rdi]\n"
-            "movq %%rsp, %[rsp]\n"
-            "movq %%rbp, %[rbp]\n"
-            "leaq (%%rip), %[rip]\n"
-        : [rax] "=m" (thread->regs[RAX_OFFSET]),
-          [rbx] "=m" (thread->regs[RBX_OFFSET]),
-          [rcx] "=m" (thread->regs[RCX_OFFSET]),
-          [rdx] "=m" (thread->regs[RDX_OFFSET]),
-          [rsi] "=m" (thread->regs[RSI_OFFSET]),
-          [rdi] "=m" (thread->regs[RDI_OFFSET]),
-          [rsp] "=m" (thread->regs[RSP_OFFSET]),
-          [rbp] "=m" (thread->regs[RBP_OFFSET]),
-          [rip] "=r" (rip) /* dest of leaq must be a register */
-    );
-
-    /* Save rip value */
-    memcpy(&thread->regs[RIP_OFFSET], &rip, REG_WIDTH);
-}
-
-static void restore_regs(const struct JKThread *thread)
-{
-    __asm__("movq %[rax], %%rax\n"
-            "movq %[rbx], %%rbx\n"
-            "movq %[rcx], %%rcx\n"
-            "movq %[rdx], %%rdx\n"
-            "movq %[rsi], %%rsi\n"
-            "movq %[rdi], %%rdi\n"
-            "movq %[rsp], %%rsp\n"
-            "movq %[rbp], %%rbp\n"
-            "jmp %[rip]\n"
-        : /* No input operands */
-        : [rax] "m" (thread->regs[RAX_OFFSET]),
-          [rbx] "m" (thread->regs[RBX_OFFSET]),
-          [rcx] "m" (thread->regs[RCX_OFFSET]),
-          [rdx] "m" (thread->regs[RDX_OFFSET]),
-          [rsi] "m" (thread->regs[RSI_OFFSET]),
-          [rdi] "m" (thread->regs[RDI_OFFSET]),
-          [rsp] "m" (thread->regs[RSP_OFFSET]),
-          [rbp] "m" (thread->regs[RBP_OFFSET]),
-          [rip] "m" (thread->regs[RIP_OFFSET])
-    );
+    /* Save current register state */
+    jkthread_save_regs(g_queue.active->thread);
+    /* Advance to the next thread */
+    jkqueue_next(&g_queue);
+    /* Restore next thread's registers */
+    jkthread_restore_regs(g_queue.active->thread,
+        g_queue.active->prev->thread->registers.rip, dummy);
 }

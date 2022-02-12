@@ -37,13 +37,13 @@ int jkqueue_push(struct JKQueue *queue, struct JKThread *thread)
     assert(thread != NULL);
 
     /* Allocate new node */
-    queue->active->prev->next = malloc(sizeof *queue->active->prev->next);
-    if (queue->active->prev->next == NULL) {
+    queue->active->next->prev = malloc(sizeof *queue->active->next->prev);
+    if (queue->active->next->prev == NULL) {
         return JKTHREAD_ALLOC_FAIL;
     }
 
     /* Update prev node */
-    queue->active->prev = queue->active->prev->next;
+    queue->active->next = queue->active->next->prev;
 
     return 0;
 }
@@ -66,7 +66,7 @@ struct JKThread *jkqueue_pop(struct JKQueue *queue)
     queue->active = queue->active->next;
     queue->active->prev = node->prev;
 
-    /* Handle case where only the main thread remains */
+    /* Handle case where only the main thread will remain */
     if (queue->active == queue->active->prev) {
         queue->active->next = queue->active;
     }
@@ -74,18 +74,10 @@ struct JKThread *jkqueue_pop(struct JKQueue *queue)
     return node->thread;
 }
 
-struct JKThread *jkqueue_peek(const struct JKQueue *queue)
-{
-    assert(queue != NULL);
-
-    return queue->active->thread;
-}
-
 struct JKThread *jkqueue_next(struct JKQueue *queue)
 {
     assert(queue != NULL);
 
     queue->active = queue->active->next;
-
     return queue->active->thread;
 }

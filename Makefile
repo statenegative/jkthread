@@ -17,8 +17,6 @@ MACROFLAGS =
 
 # Linker flags
 LDFLAGS = -L$(LIBDIR) -Wl,-rpath=$(LIBDIR)
-# Standard libraries
-LDFLAGS += -lm
 
 # Dependency flags
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
@@ -70,9 +68,12 @@ CC = gcc
 # Source files
 SRC = $(shell find $(SRCDIR) -type f -name "*.c")
 SRC := $(patsubst $(SRCDIR)/%,%,$(SRC))
+ASMSRC = $(shell find $(SRCDIR) -type f -name "*.s")
+ASMSRC := $(patsubst $(SRCDIR)/%,%,$(ASMSRC))
 
 # Object files
 OBJ = $(patsubst %.c,$(OBJDIR)/%.o,$(SRC))
+OBJ += $(patsubst %.s,$(OBJDIR)/%.o,$(ASMSRC))
 
 # Dependency files
 DEPS = $(patsubst %.c,$(DEPDIR)/%.d,$(SRC))
@@ -102,23 +103,18 @@ documentation:
 library: $(OBJ)
 	$(CC) -shared -o $(LIBDIR)/libjkthread.so $^ $(CFLAGS) $(LDFLAGS)
 
-# Test code
-test: $(TESTDIR)/a.out
-$(TESTDIR)/a.out:
-	$(MAKE) -C $(TESTDIR)
-
 # Executable
 $(FILENAME): $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 # Assembly
-%.s: %.c
 $(ASMDIR)/%.s: $(SRCDIR)/%.c $(DEPDIR)/%.d Makefile
 	$(CC) $(DEPFLAGS) -S -o $@ $< $(CFLAGS)
 
 # Objects
-%.o: %.s
 $(OBJDIR)/%.o: $(ASMDIR)/%.s $(DEPDIR)/%.d Makefile
+	$(CC) $(DEPFLAGS) -c -o $@ $< $(CFLAGS)
+$(OBJDIR)/%.o: $(SRCDIR)/%.s Makefile
 	$(CC) $(DEPFLAGS) -c -o $@ $< $(CFLAGS)
 
 $(DEPS):
