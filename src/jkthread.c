@@ -27,7 +27,7 @@ int jkthread_create(struct JKThread *thread, void *(*start_routine)(void *),
     /* Create queue if it doesn't yet exist */
     if (g_queue.active == NULL) {
         /* Save main thread */
-        jkthread_save_regs(&g_thread);
+        jkthread_save_regs(&g_thread.registers);
         code = jkqueue_init(&g_queue, &g_thread);
         if (code) {
             goto cleanup;
@@ -52,11 +52,11 @@ int jkthread_create(struct JKThread *thread, void *(*start_routine)(void *),
 
     /* Context switch */
     /* Save current register state */
-    jkthread_save_regs(g_queue.active->thread);
+    jkthread_save_regs(&g_queue.active->thread->registers);
     /* Advance to the new thread */
     jkqueue_next(&g_queue);
     /* restore new thread's registers */
-    jkthread_restore_regs(g_queue.active->thread,
+    jkthread_restore_regs(&g_queue.active->thread->registers,
         g_queue.active->prev->thread->registers.rip, arg);
 
     /* Clean up in case of error */
@@ -70,15 +70,11 @@ cleanup:
 
 void jkthread_switch()
 {
-    /* Final parameter of jkthread_restore_regs may not be NULL, so a pointer
-       to uninitialized memory is given instead. */
-    char dummy[JKTHREAD_REG_WIDTH];
-
     /* Save current register state */
-    jkthread_save_regs(g_queue.active->thread);
+    jkthread_save_regs(&g_queue.active->thread->registers);
     /* Advance to the next thread */
     jkqueue_next(&g_queue);
     /* Restore next thread's registers */
-    jkthread_restore_regs(g_queue.active->thread,
-        g_queue.active->prev->thread->registers.rip, dummy);
+    jkthread_restore_regs(&g_queue.active->thread->registers,
+        g_queue.active->prev->thread->registers.rip, NULL);
 }

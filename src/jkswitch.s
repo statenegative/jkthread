@@ -1,5 +1,4 @@
 .text
-
 # Save registers
 	.globl	jkthread_save_regs
 	.type	jkthread_save_regs,	@function
@@ -31,15 +30,20 @@ jkthread_restore_regs:
 
 	# Save calling thread's RIP value such that it skips the next jmp
 	# upon restoration
-	leaq	(%rip),	%rax
+	leaq	.L1(%rip),	%rax
 	movq	%rax,	(%rsi)
 
 	# Save RIP of thread being switched to
 	movq	56(%rdi),	%rax
+	# Check if RDX is NULL, and if so, skip input parameter copy
+	cmpq	$0,	%rdx
+	je	.L0
 	# Copy input parameter to RDI
 	movq	(%rdx),	%rdi
+.L0:
 	# Set RIP of thread being switched to
 	jmp	*%rax
 
 	# Return once this function is context switched back to
-.L0:	ret
+.L1:	ret
+	.size	jkthread_restore_regs,	.-jkthread_restore_regs

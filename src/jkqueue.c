@@ -43,6 +43,9 @@ int jkqueue_push(struct JKQueue *queue, struct JKThread *thread)
     }
 
     /* Update prev node */
+    queue->active->next->prev->next = queue->active->next;
+    queue->active->next->prev->prev = queue->active;
+    queue->active->next->prev->thread = thread;
     queue->active->next = queue->active->next->prev;
 
     return 0;
