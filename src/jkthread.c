@@ -5,7 +5,8 @@
 #include "jkthread.h"
 
 #include <assert.h>
-#include <stdlib.h>
+#include <malloc.h>
+#include <stddef.h>
 #include <string.h>
 
 #include "jkqueue.h"
@@ -20,6 +21,7 @@ int jkthread_create(struct JKThread *thread, void *(*start_routine)(void *),
     void *arg)
 {
     int code = 0;
+    void *sp;
 
     assert(thread != NULL);
     assert(start_routine != NULL);
@@ -34,16 +36,17 @@ int jkthread_create(struct JKThread *thread, void *(*start_routine)(void *),
         }
     }
 
-    /* Create stack */
-    thread->stack = malloc(JKTHREAD_STACK_SIZE);
+    /* Create stack, aligned to a 16-byte boundary */
+    thread->stack = memalign(16, JKTHREAD_STACK_SIZE);
     if (thread->stack == NULL) {
         code = JKTHREAD_STACK_LIMIT;
         goto cleanup;
     }
 
-    /* Set stack and base pointers */
-    memcpy(thread->registers.rsp, &thread->stack, JKTHREAD_REG_WIDTH);
-    memcpy(thread->registers.rbp, &thread->stack, JKTHREAD_REG_WIDTH);
+    /* Set stack and base pointers, setting up the 128-byte red zone */
+    sp = &thread->stack[JKTHREAD_STACK_SIZE - 128];
+    memcpy(thread->registers.rsp, &sp, JKTHREAD_REG_WIDTH);
+    memcpy(thread->registers.rbp, &sp, JKTHREAD_REG_WIDTH);
     /* Set RIP value to start_routine */
     memcpy(thread->registers.rip, &start_routine, JKTHREAD_REG_WIDTH);
 

@@ -19,6 +19,10 @@ jkthread_save_regs:
 	.globl	jkthread_restore_regs
 	.type	jkthread_restore_regs,	@function
 jkthread_restore_regs:
+	# Set RIP save value to the return address on the stack
+	movq	-8(%rsp),	%rax
+	movq	%rax,	(%rsi)
+
 	# Restore registers of thread being switched to
 	movq	0(%rdi),	%rbx
 	movq	8(%rdi),	%rsp
@@ -28,12 +32,7 @@ jkthread_restore_regs:
 	movq	40(%rdi),	%r14
 	movq	48(%rdi),	%r15
 
-	# Save calling thread's RIP value such that it skips the next jmp
-	# upon restoration
-	leaq	.L1(%rip),	%rax
-	movq	%rax,	(%rsi)
-
-	# Save RIP of thread being switched to
+	# Save RIP of thread being switched to before RDI is overwritten
 	movq	56(%rdi),	%rax
 	# Check if RDX is NULL, and if so, skip input parameter copy
 	cmpq	$0,	%rdx
